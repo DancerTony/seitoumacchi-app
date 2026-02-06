@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>政党マッチ度診断（13項目+自由記入）</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif; }
+    body { margin: 0; background: #f6f7fb; color: #111; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
+    .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 6px 20px rgba(0,0,0,.06); margin-bottom: 14px; }
+    h1 { font-size: 20px; margin: 0 0 8px; }
+    .muted { color: #555; font-size: 13px; line-height: 1.6; }
+    .q-title { font-weight: 800; margin-bottom: 10px; }
+    .opt { display: block; padding: 10px 12px; border: 1px solid #e5e7ef; border-radius: 12px; margin: 8px 0; cursor: pointer; }
+    .opt:hover { background: #f4f6ff; }
+    .opt input { margin-right: 8px; }
+    .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button { border: 0; border-radius: 12px; padding: 10px 14px; cursor: pointer; background: #2d5bff; color: #fff; font-weight: 800; }
+    button.secondary { background: #eef1ff; color: #1a2a6b; }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .bar { height: 10px; border-radius: 999px; background: #e9ecf7; overflow: hidden; }
+    .bar > div { height: 100%; background: #2d5bff; width: 0%; }
+    .rank { display:flex; justify-content: space-between; gap: 10px; align-items: center; }
+    .tag { display:inline-block; padding: 2px 8px; border-radius: 999px; background:#eef1ff; font-size: 12px; color:#1a2a6b; }
+    .divider { border:0;border-top:1px solid #eef1ff;margin:14px 0; }
+    details summary { cursor: pointer; font-weight: 800; }
+    textarea {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid #e5e7ef;
+      padding: 10px;
+      font-size: 14px;
+      line-height: 1.5;
+      box-sizing: border-box;
+    }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      min-height: 240px;
+    }
+    .warn { background:#fff7e6; border:1px solid #ffe1a6; padding:10px 12px; border-radius:12px; }
+    .pill { display:inline-block; padding: 2px 8px; border-radius:999px; background:#f1f3ff; font-size:12px; color:#1a2a6b; }
+  </style>
+
+  <meta name="theme-color" content="#2d5bff" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="政党マッチ度診断（13項" />
+
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card">
+    <h1>政党マッチ度診断（13分野 + 自由記入）</h1>
+    <div class="muted">
+      ・13問は <strong>強く賛成 / 賛成 / 中立 / 反対 / 強く反対</strong> の5択です。<br/>
+      ・自由記入は「辞書ベース（キーワード一致）」で争点に反映します（外部送信なし、端末内で完結）。<br/>
+      ・全13問に回答すると「診断」ボタンが有効になります（自由記入は任意）。
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <button class="secondary" id="btnReset">リセット（回答を全消去）</button>
+      <span class="tag" id="progressTag">0/13</span>
+      <span class="tag" id="statusTag">未完了</span>
+      <span class="tag" id="freeTag">自由記入: 未入力</span>
+    </div>
+  </div>
+
+  <div class="card warn">
+    <div class="muted">
+      ※「各党プロフィール（-2〜+2）」と「自由記入の辞書」は初期のたたき台です。<br/>
+      精度を上げたい場合は、下の編集欄で調整してください（特に新党・小規模政党）。
+    </div>
+  </div>
+
+  <div id="questions"></div>
+
+  <div class="card">
+    <div class="q-title">自由記入（任意）</div>
+    <div class="muted">
+      13項目以外に訴えたいこと、重視すること、譲れない条件などを書いてください。例：<br/>
+      <span class="pill">「消費税は下げたい」</span>
+      <span class="pill">「原発は反対」</span>
+      <span class="pill">「移民受入は慎重に」</span>
+      <span class="pill">「医療費負担を減らしたい」</span>
+      <span class="pill">「規制緩和で成長」</span>
+    </div>
+    <textarea id="freeText" rows="6" placeholder="（例）生活費が厳しいので減税を最優先。外国人受入は慎重に。原発は段階的に減らして再エネを増やしてほしい。"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <span class="muted">自由記入の重み</span>
+      <input id="freeWeight" type="range" min="0" max="200" value="80" style="width:240px;">
+      <span class="tag" id="freeWeightTag">0.80</span>
+      <span class="muted">（0=無視 / 1.00=標準 / 2.00=強め）</span>
+    </div>
+  </div>
+
+  <!-- 診断ボタン（最後の下） -->
+  <div class="card">
+    <div class="row">
+      <button id="btnCalc" disabled>診断する（上位3党）</button>
+      <span class="muted" id="hintText">全13問回答で診断できます。</span>
+    </div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <h1>結果</h1>
+    <div class="muted" id="answeredInfo"></div>
+
+    <h3 style="margin:12px 0 6px; font-size:15px;">おすすめトップ3（近さ順）</h3>
+    <div id="top3" style="margin-top:8px;"></div>
+
+    <hr class="divider">
+
+    <div class="muted">トップ10 全党スコア</div>
+    <div id="allScores" style="margin-top:10px;"></div>
+
+    <hr class="divider">
+
+    <details>
+      <summary>自由記入がどう解釈されたか（確認）</summary>
+      <div class="muted" style="margin-top:10px;">
+        検出されたキーワード → 争点（dimension）への加点/減点（-2..+2相当）を表示します。
+      </div>
+      <div id="freeDebug" class="muted" style="margin-top:10px;"></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>政党プロフィール編集（-2〜+2）</summary>
+      <div class="muted" style="margin:10px 0 6px;">
+        +2=強く推進、+1=推進、0=中立、-1=抑制、-2=強く抑制。未設定は0扱い。
+      </div>
+      <textarea id="profileBox" class="mono" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button id="btnApplyProfile" class="secondary">プロフィールを反映</button>
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>自由記入 辞書編集（キーワード→争点）</summary>
+      <div class="muted" style="margin:10px 0 6px;">
+        例： <span class="pill">"消費税"</span> を <span class="pill">tax_cut:+1</span> にすると「消費税」と書いた時に減税寄りへ加点します。<br/>
+        <strong>neg</strong> は「反対語/否定語」（例：反対・やめる・廃止）を検出したら符号を反転します。
+      </div>
+      <textarea id="lexBox" class="mono" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button id="btnApplyLex" class="secondary">辞書を反映</button>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<script>
+/** -------------------------
+ * トップ10 政党（表示）
+ * -------------------------- */
+const PARTIES = [
+  { id: "ldp",    name: "自由民主党" },
+  { id: "ishin",  name: "日本維新の会" },
+  { id: "chudo",  name: "中道改革連合" },
+  { id: "dpfp",   name: "国民民主党" },
+  { id: "jcp",    name: "日本共産党" },
+  { id: "reiwa",  name: "れいわ新選組" },
+  { id: "sansei", name: "参政党" },
+  { id: "hoshu",  name: "日本保守党" },
+  { id: "sdp",    name: "社会民主党" },
+  { id: "mirai",  name: "チームみらい" }
+];
+
+/** 5択（-2〜+2） */
+const FIVE = [
+  { label: "強く賛成（推奨）", value: +2 },
+  { label: "賛成（推奨）",     value: +1 },
+  { label: "どちらともいえない", value:  0 },
+  { label: "反対",             value: -1 },
+  { label: "強く反対",         value: -2 }
+];
+
+/** 13項目（dimension はプロフィールと一致） */
+const QUESTIONS = [
+  { id:"q01", dimension:"growth_invest",       weight:1.0, statement:"【経済・成長】国は科学技術・産業・インフラに“戦略投資”して成長を作るべきだ！" },
+  { id:"q02", dimension:"price_support",       weight:1.0, statement:"【物価高】補助金・給付などで“短期の家計支援”を強く行うべきだ！" },
+  { id:"q03", dimension:"tax_cut",             weight:1.1, statement:"【税制】景気・家計のために、減税（恒久も含む）を優先すべきだ！" },
+  { id:"q04", dimension:"wage_policy",         weight:1.0, statement:"【賃上げ・雇用】賃上げを進めるため、下請け・価格転嫁のルール強化など国が主導すべきだ！" },
+  { id:"q05", dimension:"social_expand",       weight:1.0, statement:"【社会保障】医療・年金・介護は給付を手厚くし、負担増も受け入れるべきだ！" },
+  { id:"q06", dimension:"child_spend",         weight:1.0, statement:"【少子化・子育て】児童手当・保育・出産支援を大幅に拡充すべきだ！（財源は国が確保）" },
+  { id:"q07", dimension:"edu_free",            weight:1.0, statement:"【教育】高等教育（大学・専門）の負担軽減（無償化/給付型奨学金）を拡大すべきだ！" },
+  { id:"q08", dimension:"defense_up",          weight:1.0, statement:"【外交・安全保障】抑止力強化のため、防衛力（装備・基地等）を今より強化すべきだ！" },
+  { id:"q09", dimension:"constitution_change", weight:0.9, statement:"【憲法】憲法改正は優先度を上げて進めるべきだ！" },
+  { id:"q10", dimension:"energy_renew",        weight:1.0, statement:"【エネルギー】電気は再生可能エネルギー（太陽光・風力など）を最優先で増やすべきだ！" },
+  { id:"q11", dimension:"climate_strict",      weight:0.9, statement:"【環境】脱炭素（CO2削減）の規制・投資を強め、コスト増があっても進めるべきだ！" },
+  { id:"q12", dimension:"decentral",           weight:0.9, statement:"【地方分権】国から地方へ権限と財源を移し、地方が決める比率を増やすべきだ！" },
+  { id:"q13", dimension:"immigration_expand",  weight:1.0, statement:"【移民・外国人政策】人手不足対策として、外国人労働者の受入を拡大すべきだ！（適正な制度整備を前提）" }
+];
+
+/** -------------------------
+ * 各党プロフィール（初期たたき台 / -2〜+2）
+ * -------------------------- */
+let PARTY_PROFILE = {
+  ldp:   { growth_invest:+2, price_support:+1, tax_cut:-1, wage_policy:+1, social_expand:+1, child_spend:+1, edu_free:0,  defense_up:+2, constitution_change:+2, energy_renew:0,  climate_strict:0,  decentral:0,  immigration_expand:+1 },
+  ishin: { growth_invest:+1, price_support:-1, tax_cut:+1, wage_policy:0,  social_expand:-1, child_spend:0,  edu_free:0,  defense_up:+1, constitution_change:+2, energy_renew:0,  climate_strict:0,  decentral:+2, immigration_expand:+1 },
+  chudo: { growth_invest:+1, price_support:0,  tax_cut:+1, wage_policy:+1, social_expand:0,  child_spend:+1, edu_free:+1, defense_up:0,  constitution_change:0,  energy_renew:+1, climate_strict:+1, decentral:+1, immigration_expand:0 },
+  dpfp:  { growth_invest:+1, price_support:0,  tax_cut:+2, wage_policy:0,  social_expand:0,  child_spend:+1, edu_free:+1, defense_up:0,  constitution_change:+1, energy_renew:0,  climate_strict:0,  decentral:+1, immigration_expand:0 },
+
+  jcp:   { growth_invest:+1, price_support:+2, tax_cut:+1, wage_policy:+2, social_expand:+2, child_spend:+2, edu_free:+2, defense_up:-2, constitution_change:-2, energy_renew:+2, climate_strict:+2, decentral:0,  immigration_expand:+1 },
+  reiwa: { growth_invest:+2, price_support:+2, tax_cut:+2, wage_policy:+2, social_expand:+2, child_spend:+2, edu_free:+2, defense_up:-2, constitution_change:-2, energy_renew:+2, climate_strict:+2, decentral:0,  immigration_expand:0 },
+  sansei:{ growth_invest:0,  price_support:0,  tax_cut:0,  wage_policy:0,  social_expand:0,  child_spend:+1, edu_free:0,  defense_up:+2, constitution_change:+1, energy_renew:0,  climate_strict:0,  decentral:0,  immigration_expand:-2 },
+  hoshu: { growth_invest:0,  price_support:0,  tax_cut:0,  wage_policy:-1, social_expand:-1, child_spend:0,  edu_free:0,  defense_up:+2, constitution_change:+2, energy_renew:-1, climate_strict:-1, decentral:0,  immigration_expand:-2 },
+  sdp:   { growth_invest:+1, price_support:+2, tax_cut:+1, wage_policy:+2, social_expand:+2, child_spend:+2, edu_free:+2, defense_up:-2, constitution_change:-2, energy_renew:+2, climate_strict:+2, decentral:0,  immigration_expand:+1 },
+  mirai: { growth_invest:0,  price_support:0,  tax_cut:0,  wage_policy:0,  social_expand:0,  child_spend:0,  edu_free:0,  defense_up:0,  constitution_change:0,  energy_renew:0,  climate_strict:0,  decentral:0,  immigration_expand:0 }
+};
+
+/** -------------------------
+ * 自由記入 辞書（キーワード→dimension/方向/強さ）
+ * - terms: どれかを含んだらマッチ（部分一致）
+ * - dimension: どの争点に反映するか
+ * - val: +1/+2 or -1/-2（基本の方向）
+ * - note: 表示用
+ *
+ * negWords が近くにある場合（例: "反対" "やめる" "廃止"）は val を反転
+ * -------------------------- */
+let LEXICON = {
+  negWords: ["反対", "やめ", "廃止", "停止", "やめる", "なくす", "減らす", "抑える", "見直す", "撤回"],
+  rules: [
+    { terms:["減税","消費税","所得税","税金下げ"], dimension:"tax_cut", val:+2, note:"減税志向" },
+    { terms:["給付","補助金","電気代補助","ガソリン補助"], dimension:"price_support", val:+2, note:"短期家計支援" },
+    { terms:["賃上げ","最低賃金","中小支援","下請法","価格転嫁"], dimension:"wage_policy", val:+2, note:"賃上げ/取引適正化" },
+    { terms:["社会保険料","年金","医療費","介護","福祉"], dimension:"social_expand", val:+2, note:"社会保障拡充" },
+    { terms:["子育て","保育","児童手当","出産"], dimension:"child_spend", val:+2, note:"子育て拡充" },
+    { terms:["学費","奨学金","教育無償化","授業料"], dimension:"edu_free", val:+2, note:"教育負担軽減" },
+    { terms:["防衛","抑止","自衛隊","軍事"], dimension:"defense_up", val:+2, note:"防衛強化" },
+    { terms:["改憲","憲法改正"], dimension:"constitution_change", val:+2, note:"改憲推進" },
+    { terms:["再エネ","太陽光","風力","脱炭素","再生可能"], dimension:"energy_renew", val:+2, note:"再エネ推進" },
+    { terms:["原発","再稼働","核","原子力"], dimension:"energy_renew", val:-2, note:"原発寄り/再エネ優先を弱める" },
+    { terms:["気候変動","CO2","温室効果","排出削減"], dimension:"climate_strict", val:+2, note:"脱炭素強化" },
+    { terms:["規制緩和","民営化","構造改革","行政改革"], dimension:"decentral", val:+1, note:"改革/分権寄り（簡易）" },
+    { terms:["地方分権","道州制","地方に権限"], dimension:"decentral", val:+2, note:"地方分権" },
+    { terms:["移民","外国人労働者","技能実習","特定技能","入管"], dimension:"immigration_expand", val:+2, note:"受入拡大" },
+    { terms:["治安","不法滞在","国境","入国制限"], dimension:"immigration_expand", val:-2, note:"受入抑制" },
+    { terms:["投資","成長戦略","産業育成","科学技術","スタートアップ"], dimension:"growth_invest", val:+2, note:"成長投資" }
+  ]
+};
+
+/** -------------------------
+ * DOM
+ * -------------------------- */
+const $qWrap = document.getElementById("questions");
+const $btnCalc = document.getElementById("btnCalc");
+const $btnReset = document.getElementById("btnReset");
+const $resultCard = document.getElementById("resultCard");
+const $top3 = document.getElementById("top3");
+const $allScores = document.getElementById("allScores");
+const $answeredInfo = document.getElementById("answeredInfo");
+const $progressTag = document.getElementById("progressTag");
+const $statusTag = document.getElementById("statusTag");
+const $hintText = document.getElementById("hintText");
+
+const $freeText = document.getElementById("freeText");
+const $freeTag = document.getElementById("freeTag");
+const $freeWeight = document.getElementById("freeWeight");
+const $freeWeightTag = document.getElementById("freeWeightTag");
+const $freeDebug = document.getElementById("freeDebug");
+
+const $profileBox = document.getElementById("profileBox");
+const $btnApplyProfile = document.getElementById("btnApplyProfile");
+const $lexBox = document.getElementById("lexBox");
+const $btnApplyLex = document.getElementById("btnApplyLex");
+
+/** -------------------------
+ * UI描画
+ * -------------------------- */
+function renderQuestions() {
+  $qWrap.innerHTML = "";
+  QUESTIONS.forEach((q, qi) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("div");
+    title.className = "q-title";
+    title.textContent = `Q${qi+1}. ${q.statement}`;
+    card.appendChild(title);
+
+    const meta = document.createElement("div");
+    meta.className = "muted";
+    meta.textContent = `重み: ${q.weight} ／ 分野キー: ${q.dimension}`;
+    card.appendChild(meta);
+
+    FIVE.forEach(opt => {
+      const label = document.createElement("label");
+      label.className = "opt";
+      label.innerHTML = `<input type="radio" name="${q.id}" value="${opt.value}"> ${opt.label}`;
+      card.appendChild(label);
+    });
+
+    $qWrap.appendChild(card);
+  });
+
+  updateProgress();
+}
+
+function renderEditors() {
+  $profileBox.value = JSON.stringify(PARTY_PROFILE, null, 2);
+  $lexBox.value = JSON.stringify(LEXICON, null, 2);
+}
+
+/** -------------------------
+ * 回答状態
+ * -------------------------- */
+function getSelectedValue(qid) {
+  const el = document.querySelector(`input[name="${qid}"]:checked`);
+  return el ? Number(el.value) : null;
+}
+
+function countAnswered() {
+  let answered = 0;
+  QUESTIONS.forEach(q => { if (getSelectedValue(q.id) !== null) answered++; });
+  return answered;
+}
+
+function normalizeText(s) {
+  return (s || "")
+    .toLowerCase()
+    .replace(/[！!？?、。,.・]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** -------------------------
+ * 自由記入の解析
+ * - dimensionごとに合算（-2..+2程度にクリップ）
+ * - negWords が近くにある場合に符号反転
+ * -------------------------- */
+function analyzeFreeText(text) {
+  const t = normalizeText(text);
+  const dim = {}; // dimension -> sum score (float)
+  const hits = []; // debug
+
+  if (!t) return { dim, hits };
+
+  // 否定語が含まれるか（ざっくり：同一文中にあれば反転扱い）
+  // より厳密にするなら、term周辺何文字かで判定などへ改造可
+  const hasNeg = (segment) => {
+    return LEXICON.negWords.some(nw => segment.includes(nw.toLowerCase()));
+  };
+
+  for (const rule of LEXICON.rules) {
+    for (const term of rule.terms) {
+      const tt = term.toLowerCase();
+      if (!tt) continue;
+      if (t.includes(tt)) {
+        // termの前後を少し切り出して否定語をざっくり判定
+        const idx = t.indexOf(tt);
+        const start = Math.max(0, idx - 12);
+        const end = Math.min(t.length, idx + tt.length + 12);
+        const window = t.slice(start, end);
+
+        let v = Number(rule.val || 0);
+        if (hasNeg(window)) v = -v;
+
+        dim[rule.dimension] = (dim[rule.dimension] ?? 0) + v;
+
+        hits.push({
+          term, window,
+          dimension: rule.dimension,
+          applied: v,
+          note: rule.note || ""
+        });
+
+        // 同じtermが何度も出てくる場合は加点が大きくなりすぎるので1回で止める
+        break;
+      }
+    }
+  }
+
+  // クリップ（自由記入だけで暴れないように）
+  for (const k of Object.keys(dim)) {
+    dim[k] = Math.max(-2, Math.min(2, dim[k]));
+  }
+
+  return { dim, hits };
+}
+
+/** -------------------------
+ * 採点（距離→近さ）
+ * - dist = Σ weight * | user - party |
+ * - maxDist = Σ weight * 4
+ * - match% = 100 * (1 - dist/maxDist)
+ *
+ * 自由記入は「追加の疑似回答」として dimension を足す
+ *   userEff = clip(userAnswer + freeDim*freeWeight, -2..+2)
+ *   未回答でも自由記入がそのdimensionに触れていれば少し効く
+ * -------------------------- */
+function computeMatchScores() {
+  const freeW = Number($freeWeight.value) / 100; // 0..2.00
+  const { dim: freeDim, hits } = analyzeFreeText($freeText.value);
+
+  // 13設問ぶん
+  const dist = Object.fromEntries(PARTIES.map(p => [p.id, 0]));
+  let maxDist = 0;
+
+  for (const q of QUESTIONS) {
+    const raw = getSelectedValue(q.id); // -2..+2 or null
+    const w = Number(q.weight ?? 1);
+
+    // 自由記入の寄与（このdimensionに触れていれば）
+    const f = Number(freeDim[q.dimension] ?? 0) * freeW;
+
+    // ユーザー回答があるならそれをベース、なければ自由記入だけでベースを作る
+    let userEff = (raw === null) ? f : (raw + f);
+
+    // クリップ
+    userEff = Math.max(-2, Math.min(2, userEff));
+
+    // maxDistは常に13問ぶん（固定）として計算（比較の一貫性）
+    maxDist += w * 4;
+
+    for (const p of PARTIES) {
+      const prof = PARTY_PROFILE[p.id] || {};
+      const pv = Number(prof[q.dimension] ?? 0);
+      dist[p.id] += w * Math.abs(userEff - pv);
+    }
+  }
+
+  const score = {};
+  for (const p of PARTIES) {
+    score[p.id] = Math.max(0, 100 * (1 - dist[p.id] / maxDist));
+  }
+
+  return { score, freeDim, hits, freeW };
+}
+
+function fmt(n) { return (Math.round(n * 10) / 10).toFixed(1); }
+
+function updateProgress() {
+  const answered = countAnswered();
+  const total = QUESTIONS.length;
+
+  $progressTag.textContent = `${answered}/${total}`;
+  const done = answered === total;
+
+  $statusTag.textContent = done ? "完了" : "未完了";
+  $btnCalc.disabled = !done;
+  $hintText.textContent = done ? "準備OK！診断できます。" : "全13問回答で診断できます。";
+
+  const ft = normalizeText($freeText.value);
+  $freeTag.textContent = ft ? `自由記入: 入力あり` : "自由記入: 未入力";
+
+  const fw = Number($freeWeight.value) / 100;
+  $freeWeightTag.textContent = fw.toFixed(2);
+}
+
+function renderResults() {
+  if (countAnswered() !== QUESTIONS.length) return;
+
+  const { score, freeDim, hits, freeW } = computeMatchScores();
+
+  const ranking = PARTIES
+    .map(p => ({ ...p, score: score[p.id] }))
+    .sort((a,b) => b.score - a.score);
+
+  document.getElementById("resultCard").style.display = "block";
+  $answeredInfo.textContent = `回答: 13/13 ＋ 自由記入重み: ${freeW.toFixed(2)}`;
+
+  const top = ranking.slice(0, 3);
+  $top3.innerHTML = top.map((r, i) => `
+    <div class="card" style="margin:10px 0;">
+      <div class="rank">
+        <div><strong>#${i+1} ${r.name}</strong></div>
+        <div><strong>${fmt(r.score)}%</strong></div>
+      </div>
+      <div class="bar" style="margin-top:10px;"><div style="width:${Math.min(100, r.score)}%"></div></div>
+      <div class="muted" style="margin-top:8px;">あなたの選好との近さ（自由記入も反映）</div>
+    </div>
+  `).join("");
+
+  $allScores.innerHTML = ranking.map(r => `
+    <div style="margin:10px 0;">
+      <div class="rank"><div>${r.name}</div><div>${fmt(r.score)}%</div></div>
+      <div class="bar"><div style="width:${Math.min(100, r.score)}%"></div></div>
+    </div>
+  `).join("");
+
+  // 自由記入のデバッグ表示
+  const dimList = Object.entries(freeDim);
+  const dimHtml = dimList.length
+    ? `<div>dimension推定: ${dimList.map(([k,v]) => `<span class="pill">${k}: ${v.toFixed(2)}</span>`).join(" ")}</div>`
+    : `<div>dimension推定:（該当なし）</div>`;
+
+  const hitHtml = hits.length
+    ? `<ul>${hits.map(h => `<li>検出: <b>${escapeHtml(h.term)}</b> → <span class="pill">${h.dimension}</span> 付与: <b>${h.applied}</b> / ${escapeHtml(h.note)} <span class="muted">（周辺: ${escapeHtml(h.window)}）</span></li>`).join("")}</ul>`
+    : `<div>検出キーワード:（なし）</div>`;
+
+  $freeDebug.innerHTML = dimHtml + "<div style='height:8px'></div>" + hitHtml;
+
+  document.getElementById("resultCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function escapeHtml(s) {
+  return (s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+function resetAll() {
+  QUESTIONS.forEach(q => {
+    document.querySelectorAll(`input[name="${q.id}"]`).forEach(el => el.checked = false);
+  });
+  $freeText.value = "";
+  document.getElementById("resultCard").style.display = "none";
+  updateProgress();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+/** -------------------------
+ * エディタ反映
+ * -------------------------- */
+function applyProfile() {
+  try {
+    const obj = JSON.parse($profileBox.value);
+    for (const p of PARTIES) {
+      if (!obj[p.id]) throw new Error(`"${p.id}" が見つかりません（トップ10全てのキーが必要）`);
+    }
+    PARTY_PROFILE = obj;
+    document.getElementById("resultCard").style.display = "none";
+    alert("政党プロフィールを反映しました。必要なら診断し直してください。");
+  } catch (e) {
+    alert("プロフィールJSONの解析に失敗: " + e.message);
+  }
+}
+
+function applyLex() {
+  try {
+    const obj = JSON.parse($lexBox.value);
+    if (!obj || !Array.isArray(obj.negWords) || !Array.isArray(obj.rules)) {
+      throw new Error("lexiconは { negWords:[], rules:[] } の形式が必要です");
+    }
+    LEXICON = obj;
+    document.getElementById("resultCard").style.display = "none";
+    alert("自由記入の辞書（LEXICON）を反映しました。");
+  } catch (e) {
+    alert("辞書JSONの解析に失敗: " + e.message);
+  }
+}
+
+/** -------------------------
+ * listeners
+ * -------------------------- */
+document.addEventListener("change", (e) => {
+  if (e.target && e.target.matches('input[type="radio"]')) updateProgress();
+});
+$freeText.addEventListener("input", () => updateProgress());
+$freeWeight.addEventListener("input", () => updateProgress());
+
+document.getElementById("btnCalc").addEventListener("click", renderResults);
+document.getElementById("btnReset").addEventListener("click", resetAll);
+
+$btnApplyProfile.addEventListener("click", applyProfile);
+$btnApplyLex.addEventListener("click", applyLex);
+
+/** init */
+renderQuestions();
+renderEditors();
+updateProgress();
+</script>
+
+<script>
+  // PWA: Service Worker registration
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js').catch(console.error);
+    });
+  }
+</script>
+
+</body>
+</html>
